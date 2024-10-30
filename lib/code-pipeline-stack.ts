@@ -6,21 +6,15 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export class CodePipelineStack extends cdk.Stack {
+
+  public readonly pipeline: codepipeline.Pipeline;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     // Create artifact bucket
-    const artifactBucket = new s3.Bucket(this, 'ArtifactBucket', {
+    const artifactBucket = new s3.Bucket(this, 'PipelineArtifactsBucket', {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-    });
-
-    // Create Pipeline
-    const pipeline = new codepipeline.Pipeline(this, 'Pipeline', {
-      pipelineName: 'pipeline-with-codebuild',
-      artifactBucket: artifactBucket,
     });
 
     // Source output artifact
@@ -30,17 +24,15 @@ export class CodePipelineStack extends cdk.Stack {
     const buildOutput = new codepipeline.Artifact('BuildOutput');
 
     // Create CodeBuild project
-    const buildProject = new codebuild.PipelineProject(this, 'BuildProject', {
+    const buildProject = new codebuild.PipelineProject(this, 'CodeBuildProject', {
       projectName: 'my-build-project',
       environment: {
-        buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_4,
-        privileged: true, // Needed if you plan to use Docker
+        buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
       },
       environmentVariables: {
         NODE_ENV: {
           value: 'production'
         },
-        // Add other environment variables as needed
       },
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
@@ -50,17 +42,20 @@ export class CodePipelineStack extends cdk.Stack {
               'npm install'
             ]
           },
+          synth: {
+            commands: [
+              'cdk synth'
+            ]
+          },
           build: {
             commands: [
-              'npm run build',
-              'npm run test'
+              'cdk deploy new-cdk-test-stack'
             ]
           }
         },
         artifacts: {
-          files: [
-            '**/*'
-          ]
+          'base-directory': 'dist',
+          files: '**/*'
         },
         cache: {
           paths: [
@@ -70,67 +65,38 @@ export class CodePipelineStack extends cdk.Stack {
       })
     });
 
+     // Create Pipeline
+    this.pipeline = new codepipeline.Pipeline(this, 'Pipeline', {
+      pipelineName: 'pipeline-with-codebuild',
+      artifactBucket: artifactBucket,
+    });
+
     // Add Source Stage
-    pipeline.addStage({
+    this.pipeline.addStage({
       stageName: 'Source',
       actions: [
-        new codepipeline_actions.CodeStarConnectionsSourceAction({
-          actionName: 'Source',
-          owner: 'your-github-username',
-          repo: 'your-repo-name',
-          branch: 'main',
-          connectionArn: 'your-codestar-connection-arn', // Replace with your CodeStar connection ARN
+        new codepipeline_actions.GitHubSourceAction({
+          actionName: 'GitHub_Source',
+          owner: 'PhuongVTI', 
+          repo: 'CDK-CODE', 
+          oauthToken: cdk.SecretValue.plainText('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'), 
           output: sourceOutput,
+          branch: 'main', 
         })
       ],
     });
 
     // Add Build Stage
-    pipeline.addStage({
+    this.pipeline.addStage({
       stageName: 'Build',
       actions: [
         new codepipeline_actions.CodeBuildAction({
-          actionName: 'Build',
+          actionName: 'CodeBuild',
           project: buildProject,
           input: sourceOutput,
           outputs: [buildOutput],
         }),
       ],
-    });
-
-    // Add Deploy Stage (example with S3 deployment)
-    pipeline.addStage({
-      stageName: 'Deploy',
-      actions: [
-        new codepipeline_actions.S3DeployAction({
-          actionName: 'Deploy',
-          input: buildOutput,
-          bucket: artifactBucket,
-        }),
-      ],
-    });
-
-    // Add CloudWatch Events Rule to monitor pipeline status
-    const rule = new cdk.aws_events.Rule(this, 'PipelineStatusRule', {
-      eventPattern: {
-        source: ['aws.codepipeline'],
-        detailType: ['CodePipeline Pipeline Execution State Change'],
-        detail: {
-          pipeline: [pipeline.pipelineName]
-        }
-      }
-    });
-
-    // Output the pipeline ARN
-    new cdk.CfnOutput(this, 'PipelineArn', {
-      value: pipeline.pipelineArn,
-      description: 'The ARN of the pipeline'
-    });
-
-    // Output the artifact bucket ARN
-    new cdk.CfnOutput(this, 'ArtifactBucketArn', {
-      value: artifactBucket.bucketArn,
-      description: 'The ARN of the artifact bucket'
     });
   }
 }

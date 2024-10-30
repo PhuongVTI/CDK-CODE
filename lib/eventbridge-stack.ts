@@ -36,7 +36,7 @@ export class EventBridgeStack extends cdk.Stack {
     eventBridgeRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['codepipeline:StartPipelineExecution'],
-        resources: [pipeline.pipelineArn],
+        resources: [props.pipeline.pipelineArn],
         effect: iam.Effect.ALLOW,
       })
     );

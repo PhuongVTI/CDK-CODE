@@ -7,5 +7,7 @@ import { EventBridgeStack } from '../lib/eventbridge-stack';
 
 const app = new cdk.App();
 new NewCdkTestStack(app, 'NewCdkTestStack');
-new CodePipelineStack(app, 'CodePipelineStack');
-new EventBridgeStack(app, 'EventBridgeStack');
+const codePipelineStack = new CodePipelineStack(app, 'CodePipelineStack');
+new EventBridgeStack(app, 'EventBridgeStack', {
+    pipeline: codePipelineStack.pipeline,  // Truyền pipeline đã tạo vào đây
+  });

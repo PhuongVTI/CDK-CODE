@@ -65,7 +65,7 @@ export class NewCdkTestStack extends cdk.Stack {
 
       return metrics;
     } catch (error) {
-      console.error('Lỗi khi lấy danh sách metrics:', error);
+      console.error('Error when getting metrics list:', error);
       return [];
     }
   }
